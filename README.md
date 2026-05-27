@@ -21,8 +21,8 @@ The firmware uses on-board LEDs to communicate its current status:
 
 ## Features
 *   **Dynamic UUID Rotation:** Updates the iBeacon UUID in real-time without restarting the device.
-*   **Maximum Signal Strength (+9dBm):** Radio TX power is boosted to the maximum level for reliable coverage across large classrooms.
-*   **iBeacon Calibration:** Pre-calibrated for high-power broadcasting to maintain distance accuracy on mobile apps.
+*   **Proximity-Based Security (-12dBm):** Radio TX power is intentionally lowered to ensure the signal is mostly contained within the classroom, preventing attendance spoofing from outside.
+*   **iBeacon Calibration:** Pre-calibrated for proximity-based broadcasting (-80dBm at 1m) to maintain distance accuracy on mobile apps.
 *   **Multi-WiFi Fallback:** Supports a list of prioritized Wi-Fi networks for maximum uptime.
 *   **Encrypted Communication:** Uses HTTPS/SSL for server heartbeats.
 *   **NimBLE Stack:** Built using the efficient NimBLE host stack for optimized power and memory usage on ESP-IDF v6.0+.

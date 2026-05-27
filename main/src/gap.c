@@ -56,17 +56,18 @@ static void start_advertising(void) {
         mfg_data[22] = 0x00; mfg_data[23] = 0x00; // Minor
         
         /* TX Power Calibration Value at 1 meter. 
-         * Since we are setting radio power to +9dBm, we use -51dBm as calibration.
-         * -51 in 2's complement is 0xCD.
+         * Since we are setting radio power to -12dBm for classroom proximity,
+         * we use -80dBm as calibration.
+         * -80 in 2's complement is 0xB0.
          */
-        mfg_data[24] = 0xCD; 
+        mfg_data[24] = 0xB0; 
         
         adv_fields.mfg_data = mfg_data;
         adv_fields.mfg_data_len = 25;
     }
 
-    /* Set actual radio TX power to maximum (+9dBm) */
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
+    /* Set radio TX power to a lower level for classroom proximity security (-12dBm) */
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_N12);
 
     /* Set advertisement fields */
     rc = ble_gap_adv_set_fields(&adv_fields);
