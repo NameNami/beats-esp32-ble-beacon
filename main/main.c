@@ -113,6 +113,45 @@ static void on_stack_sync(void);
 static void nimble_host_config_init(void);
 static void nimble_host_task(void *param);
 
+static char response_data[2048];
+static int response_len = 0;
+
+static esp_err_t _http_event_handler(esp_http_client_event_t *evt) {
+    switch(evt->event_id) {
+        case HTTP_EVENT_ERROR:
+            break;
+        case HTTP_EVENT_ON_CONNECTED:
+            response_len = 0;
+            memset(response_data, 0, sizeof(response_data));
+            break;
+        case HTTP_EVENT_HEADER_SENT:
+            break;
+        case HTTP_EVENT_ON_HEADER:
+            break;
+        case HTTP_EVENT_ON_HEADERS_COMPLETE:
+            break;
+        case HTTP_EVENT_ON_STATUS_CODE:
+            break;
+        case HTTP_EVENT_ON_DATA:
+            if (!esp_http_client_is_chunked_response(evt->client)) {
+                // Fixed length
+            }
+            if (response_len + evt->data_len < sizeof(response_data)) {
+                memcpy(response_data + response_len, evt->data, evt->data_len);
+                response_len += evt->data_len;
+                response_data[response_len] = '\0';
+            }
+            break;
+        case HTTP_EVENT_ON_FINISH:
+            break;
+        case HTTP_EVENT_DISCONNECTED:
+            break;
+        case HTTP_EVENT_REDIRECT:
+            break;
+    }
+    return ESP_OK;
+}
+
 /* Private functions */
 /*
  *  Stack event callback functions
@@ -193,6 +232,7 @@ void heartbeat_task(void *pvParameters) {
             .transport_type = HTTP_TRANSPORT_OVER_SSL,
             .method = HTTP_METHOD_POST,
             .cert_pem = server_root_cert,
+            .event_handler = _http_event_handler,
         };
         
         esp_http_client_handle_t client = esp_http_client_init(&config);
@@ -206,18 +246,10 @@ void heartbeat_task(void *pvParameters) {
             int status_code = esp_http_client_get_status_code(client);
             printf("HTTP POST Status = %d\n", status_code);
             
-            // Read response body
-            int content_length = esp_http_client_get_content_length(client);
-            char *response_buffer = NULL;
-            if (content_length > 0) {
-                response_buffer = malloc(content_length + 1);
-                if (response_buffer) {
-                    int read_len = esp_http_client_read_response(client, response_buffer, content_length);
-                    if (read_len > 0) {
-                        response_buffer[read_len] = '\0';
-                        printf("Response Content: %s\n", response_buffer);
-                    }
-                }
+            if (response_len > 0) {
+                printf("Response Content: %s\n", response_data);
+            } else {
+                printf("Response Content: (empty)\n");
             }
 
             if (status_code == 200) {
@@ -226,8 +258,8 @@ void heartbeat_task(void *pvParameters) {
                 vTaskDelay(pdMS_TO_TICKS(200));
                 gpio_set_level(BLUE_LED_GPIO, 0);
                 
-                if (response_buffer) {
-                    cJSON *json = cJSON_Parse(response_buffer);
+                if (response_len > 0) {
+                    cJSON *json = cJSON_Parse(response_data);
                     if (json) {
                         cJSON *uuid = cJSON_GetObjectItem(json, "uuid");
                         if (cJSON_IsString(uuid) && (uuid->valuestring != NULL)) {
@@ -249,7 +281,6 @@ void heartbeat_task(void *pvParameters) {
                 // Request failed (not 200): Turn Blue LED ON steady
                 gpio_set_level(BLUE_LED_GPIO, 1);
             }
-            if (response_buffer) free(response_buffer);
         } else {
             printf("HTTP POST request failed: %s\n", esp_err_to_name(err));
             // Connection failed: Turn Blue LED ON steady

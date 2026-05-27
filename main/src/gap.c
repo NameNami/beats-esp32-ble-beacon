@@ -29,16 +29,17 @@ static void start_advertising(void) {
     int rc = 0;
     const char *name;
     struct ble_hs_adv_fields adv_fields = {0};
+    struct ble_hs_adv_fields rsp_fields = {0};
     struct ble_gap_adv_params adv_params = {0};
 
     /* Set advertising flags */
     adv_fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
 
-    /* Set device name */
+    /* Move device name to Scan Response to save space in Adv Data (max 31 bytes) */
     name = ble_svc_gap_device_name();
-    adv_fields.name = (uint8_t *)name;
-    adv_fields.name_len = strlen(name);
-    adv_fields.name_is_complete = 1;
+    rsp_fields.name = (uint8_t *)name;
+    rsp_fields.name_len = strlen(name);
+    rsp_fields.name_is_complete = 1;
 
     /* Set iBeacon-style Manufacturer Specific Data if UUID is available */
     uint8_t mfg_data[25];
@@ -56,23 +57,29 @@ static void start_advertising(void) {
         mfg_data[22] = 0x00; mfg_data[23] = 0x00; // Minor
         
         /* TX Power Calibration Value at 1 meter. 
-         * Since we are setting radio power to -12dBm for classroom proximity,
-         * we use -80dBm as calibration.
-         * -80 in 2's complement is 0xB0.
+         * The user observed -56dBm when touching the device at 0dBm/Low power.
+         * Setting calibration to -56dBm (0xC8) so apps report 0-1m distance correctly.
          */
-        mfg_data[24] = 0xB0; 
+        mfg_data[24] = 0xC8; 
         
         adv_fields.mfg_data = mfg_data;
         adv_fields.mfg_data_len = 25;
     }
 
-    /* Set radio TX power to a lower level for classroom proximity security (-12dBm) */
-    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_N12);
+    /* Set radio TX power to 0dBm for a stable but controlled classroom signal */
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_N0);
 
     /* Set advertisement fields */
     rc = ble_gap_adv_set_fields(&adv_fields);
     if (rc != 0) {
         ESP_LOGE(TAG, "failed to set advertising data, error code: %d", rc);
+        return;
+    }
+
+    /* Set scan response fields (containing the name) */
+    rc = ble_gap_adv_rsp_set_fields(&rsp_fields);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "failed to set scan response data, error code: %d", rc);
         return;
     }
 
