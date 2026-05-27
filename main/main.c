@@ -206,45 +206,50 @@ void heartbeat_task(void *pvParameters) {
             int status_code = esp_http_client_get_status_code(client);
             printf("HTTP POST Status = %d\n", status_code);
             
+            // Read response body
+            int content_length = esp_http_client_get_content_length(client);
+            char *response_buffer = NULL;
+            if (content_length > 0) {
+                response_buffer = malloc(content_length + 1);
+                if (response_buffer) {
+                    int read_len = esp_http_client_read_response(client, response_buffer, content_length);
+                    if (read_len > 0) {
+                        response_buffer[read_len] = '\0';
+                        printf("Response Content: %s\n", response_buffer);
+                    }
+                }
+            }
+
             if (status_code == 200) {
                 // Success: Blink Blue LED
                 gpio_set_level(BLUE_LED_GPIO, 1);
                 vTaskDelay(pdMS_TO_TICKS(200));
                 gpio_set_level(BLUE_LED_GPIO, 0);
                 
-                // Read response body to extract UUID
-                int content_length = esp_http_client_get_content_length(client);
-                if (content_length > 0) {
-                    char *response_buffer = malloc(content_length + 1);
-                    if (response_buffer) {
-                        int read_len = esp_http_client_read_response(client, response_buffer, content_length);
-                        if (read_len > 0) {
-                            response_buffer[read_len] = '\0';
-                            cJSON *json = cJSON_Parse(response_buffer);
-                            if (json) {
-                                cJSON *uuid = cJSON_GetObjectItem(json, "uuid");
-                                if (cJSON_IsString(uuid) && (uuid->valuestring != NULL)) {
-                                    printf("Received UUID from server: %s\n", uuid->valuestring);
-                                    if (update_beacon_uuid(uuid->valuestring)) {
-                                        // UUID Changed: Double blink Blue LED to distinguish from regular heartbeat
-                                        for (int i = 0; i < 2; i++) {
-                                            gpio_set_level(BLUE_LED_GPIO, 1);
-                                            vTaskDelay(pdMS_TO_TICKS(100));
-                                            gpio_set_level(BLUE_LED_GPIO, 0);
-                                            vTaskDelay(pdMS_TO_TICKS(100));
-                                        }
-                                    }
+                if (response_buffer) {
+                    cJSON *json = cJSON_Parse(response_buffer);
+                    if (json) {
+                        cJSON *uuid = cJSON_GetObjectItem(json, "uuid");
+                        if (cJSON_IsString(uuid) && (uuid->valuestring != NULL)) {
+                            printf("Parsed UUID: %s\n", uuid->valuestring);
+                            if (update_beacon_uuid(uuid->valuestring)) {
+                                // UUID Changed: Double blink Blue LED to distinguish from regular heartbeat
+                                for (int i = 0; i < 2; i++) {
+                                    gpio_set_level(BLUE_LED_GPIO, 1);
+                                    vTaskDelay(pdMS_TO_TICKS(100));
+                                    gpio_set_level(BLUE_LED_GPIO, 0);
+                                    vTaskDelay(pdMS_TO_TICKS(100));
                                 }
-                                cJSON_Delete(json);
                             }
                         }
-                        free(response_buffer);
+                        cJSON_Delete(json);
                     }
                 }
             } else {
                 // Request failed (not 200): Turn Blue LED ON steady
                 gpio_set_level(BLUE_LED_GPIO, 1);
             }
+            if (response_buffer) free(response_buffer);
         } else {
             printf("HTTP POST request failed: %s\n", esp_err_to_name(err));
             // Connection failed: Turn Blue LED ON steady
