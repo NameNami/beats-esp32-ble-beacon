@@ -6,6 +6,7 @@
 /* Includes */
 #include "gap.h"
 #include "common.h"
+#include "esp_bt.h"
 
 /* Private function declarations */
 inline static void format_addr(char *addr_str, uint8_t addr[]);
@@ -50,14 +51,22 @@ static void start_advertising(void) {
         mfg_data[3] = 0x15;
         // 16-byte UUID
         memcpy(&mfg_data[4], beacon_uuid, 16);
-        // Major (0), Minor (0), TX Power (-59dBm) - placeholders
+        // Major (0), Minor (0)
         mfg_data[20] = 0x00; mfg_data[21] = 0x00; // Major
         mfg_data[22] = 0x00; mfg_data[23] = 0x00; // Minor
-        mfg_data[24] = 0xc5; // TX Power
+        
+        /* TX Power Calibration Value at 1 meter. 
+         * Since we are setting radio power to +9dBm, we use -51dBm as calibration.
+         * -51 in 2's complement is 0xCD.
+         */
+        mfg_data[24] = 0xCD; 
         
         adv_fields.mfg_data = mfg_data;
         adv_fields.mfg_data_len = 25;
     }
+
+    /* Set actual radio TX power to maximum (+9dBm) */
+    esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, ESP_PWR_LVL_P9);
 
     /* Set advertisement fields */
     rc = ble_gap_adv_set_fields(&adv_fields);
